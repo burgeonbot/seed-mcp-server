@@ -1,0 +1,28 @@
+{
+  "name": "seed-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for managing Seed tables and relationships through the Seed backend API.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "seed-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.9",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "ISC"
+}
