@@ -24,6 +24,35 @@ export interface TableMetadata {
   businessRules?: Record<string, string>;
 }
 
+export interface FrameMetadata {
+  name: string;
+  table: string;
+  label?: string;
+  description?: string;
+  fields: Record<string, FieldValue>;
+  relations?: Record<string, RelationValue>;
+  fieldFilters?: unknown;
+  fieldOrder?: unknown;
+  relationFilters?: unknown;
+}
+
+export interface ViewLayout {
+  device: "web" | "mobile";
+  group: string;
+  list?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ViewMetadata {
+  name: string;
+  frame: string;
+  label?: string;
+  description?: string;
+  layout: ViewLayout;
+  viewRoles?: Role[];
+  editRoles?: Role[];
+}
+
 export interface Organization {
   name: string;
   description?: string;

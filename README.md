@@ -53,6 +53,16 @@ npm start
 - `seed_get_table`
 - `seed_create_table`
 - `seed_add_relationship`
+- `seed_list_frames`
+- `seed_get_frame`
+- `seed_create_frame`
+- `seed_update_frame`
+- `seed_delete_frames`
+- `seed_list_views`
+- `seed_get_view`
+- `seed_create_view`
+- `seed_update_view`
+- `seed_delete_views`
 - `seed_list_documents`
 - `seed_add_documents`
 - `seed_add_mock_data`
@@ -88,6 +98,54 @@ Grant a role access to a table/resource by creating a row in `permissions` and l
 ```
 
 Access bitmask: create `1`, read `2`, update `4`, delete `8`, full CRUD `15`.
+
+### `seed_create_frame`
+
+Create a frame on top of an existing table. Frames select the fields and relations that a view can render.
+
+```json
+{
+  "name": "accounts_frame",
+  "table": "accounts",
+  "label": "Accounts",
+  "fields": [
+    { "name": "name", "type": "string", "label": "Name" },
+    { "name": "accountType", "type": "enum", "label": "Account Type" }
+  ],
+  "relations": []
+}
+```
+
+Optional filter/order inputs are JSON strings: `fieldFiltersJson`, `fieldOrderJson`, and `relationFiltersJson`.
+
+For user-scoped frames, use `relationFiltersJson` with Seed's current-user sentinel. The backend treats
+`"___current___"` as the logged-in user's email when the dot-walk path ends at a related `users.email`
+field. The path uses Seed's generated join table name:
+
+```json
+{
+  "relationFiltersJson": "{\"[Op.and]\":[{\"users_contacts_user.email\":{\"[Op.like]\":\"___current___\"}}]}"
+}
+```
+
+Join table names are generated as `<lexicographically larger table>_<lexicographically smaller table>_<relationName>`.
+For example, a `contacts.user -> users` relation uses `users_contacts_user.email`, while
+`voice_notes.user -> users` uses `voice_notes_users_user.email`.
+
+### `seed_create_view`
+
+Create a view on top of an existing frame.
+
+```json
+{
+  "name": "accounts_web_view",
+  "frame": "accounts_frame",
+  "label": "Accounts",
+  "layoutJson": "{\"device\":\"web\",\"group\":\"CRM\",\"list\":{\"type\":\"default\"}}"
+}
+```
+
+Optional role inputs are JSON strings: `viewRolesJson` and `editRolesJson`.
 
 ### `seed_list_documents`
 

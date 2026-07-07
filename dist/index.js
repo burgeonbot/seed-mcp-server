@@ -27,6 +27,26 @@ const tableSchema = z.object({
     fields: z.array(fieldSchema).min(1).describe("Fields to create on the table."),
     relations: z.array(relationSchema).optional().describe("Relationships to create with the table.")
 });
+const frameSchema = z.object({
+    name: z.string().min(1).describe("Machine name for the frame."),
+    table: z.string().min(1).describe("Source table name for the frame."),
+    label: z.string().optional().describe("Human-readable frame label. Defaults to the frame name."),
+    description: z.string().optional().describe("Frame description."),
+    fields: z.array(fieldSchema).min(1).describe("Fields from the source table to expose in the frame."),
+    relations: z.array(relationSchema).optional().describe("Relations from the source table to expose in the frame."),
+    fieldFiltersJson: z.string().optional().describe("Optional JSON field filters using Seed's Sequelize-style filter shape."),
+    fieldOrderJson: z.string().optional().describe("Optional JSON field order metadata."),
+    relationFiltersJson: z.string().optional().describe("Optional JSON relation filters using Seed's Sequelize-style filter shape. For current-user scoping, dot-walk to a related users.email field and use ___current___, e.g. {\"[Op.and]\":[{\"users_contacts_user.email\":{\"[Op.like]\":\"___current___\"}}]}.")
+});
+const viewSchema = z.object({
+    name: z.string().min(1).describe("Machine name for the view."),
+    frame: z.string().min(1).describe("Frame name this view renders."),
+    label: z.string().optional().describe("Human-readable view label. Defaults to the view name."),
+    description: z.string().optional().describe("View description."),
+    layoutJson: z.string().describe("View layout as JSON. Example: {\"device\":\"web\",\"group\":\"CRM\",\"list\":{\"type\":\"default\"}}"),
+    viewRolesJson: z.string().optional().describe("Optional JSON array of roles allowed to view this view."),
+    editRolesJson: z.string().optional().describe("Optional JSON array of roles allowed to edit this view.")
+});
 const documentSchema = z.object({
     id: z.string().optional().describe("Existing document id. Used for updates; ignored for adds."),
     fields: z.record(z.unknown()).describe("Field values keyed by table field name."),
@@ -121,6 +141,58 @@ server.tool("seed_add_relationship", "Add or replace a relationship on an existi
         table: updatedTable
     });
 });
+server.tool("seed_list_frames", "List Seed frame metadata from the configured organization.", {
+    pageNumber: z.number().int().min(0).optional().default(0),
+    pageSize: z.number().int().min(1).max(500).optional().default(100),
+    filtersJson: z.string().optional().describe("Optional JSON filters using Seed's Sequelize-style filter shape.")
+}, async ({ pageNumber, pageSize, filtersJson }) => {
+    const filters = parseOptionalJson(filtersJson, "filtersJson");
+    return toToolResult(await client.listFrames(pageNumber, pageSize, filters));
+});
+server.tool("seed_get_frame", "Get Seed metadata for one frame.", {
+    frameName: z.string().min(1)
+}, async ({ frameName }) => toToolResult(await client.getFrame(frameName)));
+server.tool("seed_create_frame", "Create a Seed frame on an existing table. Frames select table fields/relations and optional filters before creating views.", frameSchema.shape, async (input) => {
+    await client.getTable(input.table);
+    const frame = toFrameMetadata(input);
+    const result = await client.createFrame(frame);
+    return toToolResult({ message: result, frame });
+});
+server.tool("seed_update_frame", "Update Seed frame metadata by frame name.", frameSchema.shape, async (input) => {
+    await client.getTable(input.table);
+    const frame = toFrameMetadata(input);
+    const result = await client.updateFrame(frame);
+    return toToolResult({ message: result, frame });
+});
+server.tool("seed_delete_frames", "Delete Seed frames by name.", {
+    frameNames: z.array(z.string().min(1)).min(1).describe("Frame names to delete.")
+}, async ({ frameNames }) => toToolResult({ message: await client.deleteFrames(frameNames), frameNames }));
+server.tool("seed_list_views", "List Seed view metadata from the configured organization.", {
+    pageNumber: z.number().int().min(0).optional().default(0),
+    pageSize: z.number().int().min(1).max(500).optional().default(100),
+    filtersJson: z.string().optional().describe("Optional JSON filters using Seed's Sequelize-style filter shape.")
+}, async ({ pageNumber, pageSize, filtersJson }) => {
+    const filters = parseOptionalJson(filtersJson, "filtersJson");
+    return toToolResult(await client.listViews(pageNumber, pageSize, filters));
+});
+server.tool("seed_get_view", "Get Seed metadata for one view.", {
+    viewName: z.string().min(1)
+}, async ({ viewName }) => toToolResult(await client.getView(viewName)));
+server.tool("seed_create_view", "Create a Seed view on an existing frame.", viewSchema.shape, async (input) => {
+    await client.getFrame(input.frame);
+    const view = toViewMetadata(input);
+    const result = await client.createView(view);
+    return toToolResult({ message: result, view });
+});
+server.tool("seed_update_view", "Update Seed view metadata by view name.", viewSchema.shape, async (input) => {
+    await client.getFrame(input.frame);
+    const view = toViewMetadata(input);
+    const result = await client.updateView(view);
+    return toToolResult({ message: result, view });
+});
+server.tool("seed_delete_views", "Delete Seed views by name.", {
+    viewNames: z.array(z.string().min(1)).min(1).describe("View names to delete.")
+}, async ({ viewNames }) => toToolResult({ message: await client.deleteViews(viewNames), viewNames }));
 server.tool("seed_list_documents", "List documents from a Seed table. Useful for finding record ids before creating related data.", {
     tableName: z.string().min(1).describe("Table to read documents from."),
     pageNumber: z.number().int().min(0).optional().default(0),
@@ -195,6 +267,45 @@ function toTableMetadata(input) {
         ]))
     };
 }
+function toFrameMetadata(input) {
+    return {
+        name: input.name,
+        table: input.table,
+        label: input.label ?? input.name,
+        description: input.description ?? "",
+        fields: Object.fromEntries(input.fields.map((field) => [
+            field.name,
+            {
+                type: field.type,
+                label: field.label ?? field.name,
+                allowNull: field.allowNull,
+                enumValues: field.enumValues
+            }
+        ])),
+        relations: Object.fromEntries((input.relations ?? []).map((relation) => [
+            relation.name,
+            {
+                type: relation.type,
+                table: relation.table,
+                label: relation.label ?? relation.name
+            }
+        ])),
+        fieldFilters: parseOptionalJson(input.fieldFiltersJson, "fieldFiltersJson"),
+        fieldOrder: parseOptionalJson(input.fieldOrderJson, "fieldOrderJson"),
+        relationFilters: parseOptionalJson(input.relationFiltersJson, "relationFiltersJson")
+    };
+}
+function toViewMetadata(input) {
+    return {
+        name: input.name,
+        frame: input.frame,
+        label: input.label ?? input.name,
+        description: input.description ?? "",
+        layout: parseJsonObject(input.layoutJson, "layoutJson"),
+        viewRoles: parseOptionalArrayOrUndefined(input.viewRolesJson, "viewRolesJson"),
+        editRoles: parseOptionalArrayOrUndefined(input.editRolesJson, "editRolesJson")
+    };
+}
 function toOrganization(input) {
     return {
         name: input.name,
@@ -232,6 +343,19 @@ function parseOptionalArray(value, fieldName) {
     }
     if (!Array.isArray(parsed)) {
         throw new SeedApiError(`${fieldName} must be a JSON array when provided.`);
+    }
+    return parsed;
+}
+function parseOptionalArrayOrUndefined(value, fieldName) {
+    if (value === undefined) {
+        return undefined;
+    }
+    return parseOptionalArray(value, fieldName);
+}
+function parseJsonObject(value, fieldName) {
+    const parsed = parseOptionalJson(value, fieldName);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new SeedApiError(`${fieldName} must be a JSON object.`);
     }
     return parsed;
 }

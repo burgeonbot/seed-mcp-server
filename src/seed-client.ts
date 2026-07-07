@@ -1,4 +1,14 @@
-import type { Document, Organization, Page, Permission, RelationValue, Role, TableMetadata } from "./types.js";
+import type {
+  Document,
+  FrameMetadata,
+  Organization,
+  Page,
+  Permission,
+  RelationValue,
+  Role,
+  TableMetadata,
+  ViewMetadata
+} from "./types.js";
 
 interface SeedClientOptions {
   apiBase: string;
@@ -77,6 +87,52 @@ export class SeedClient {
 
     await this.updateTable(updatedTable);
     return updatedTable;
+  }
+
+  async listFrames(pageNumber = 0, pageSize = 100, filters?: unknown): Promise<Page<FrameMetadata>> {
+    return this.post<Page<FrameMetadata>>("/api/rel_data/frames", {
+      paginationContext: { pageNumber, pageSize },
+      filters
+    });
+  }
+
+  async getFrame(frameName: string): Promise<FrameMetadata> {
+    return this.post<FrameMetadata>("/api/rel_data/frame", { frameName });
+  }
+
+  async createFrame(frame: FrameMetadata): Promise<string> {
+    return this.postText("/api/rel_data/frame/add", normalizeFrame(frame));
+  }
+
+  async updateFrame(frame: FrameMetadata): Promise<string> {
+    return this.postText("/api/rel_data/frame/update", normalizeFrame(frame));
+  }
+
+  async deleteFrames(framesIds: string[]): Promise<string> {
+    return this.postText("/api/rel_data/frames/delete", { framesIds });
+  }
+
+  async listViews(pageNumber = 0, pageSize = 100, filters?: unknown): Promise<Page<ViewMetadata>> {
+    return this.post<Page<ViewMetadata>>("/api/rel_data/views", {
+      paginationContext: { pageNumber, pageSize },
+      filters
+    });
+  }
+
+  async getView(viewName: string): Promise<ViewMetadata> {
+    return this.post<ViewMetadata>("/api/rel_data/view", { viewName });
+  }
+
+  async createView(view: ViewMetadata): Promise<string> {
+    return this.postText("/api/rel_data/view/add", normalizeView(view));
+  }
+
+  async updateView(view: ViewMetadata): Promise<string> {
+    return this.postText("/api/rel_data/view/update", normalizeView(view));
+  }
+
+  async deleteViews(viewsIds: string[]): Promise<string> {
+    return this.postText("/api/rel_data/views/delete", { viewsIds });
   }
 
   async listDocuments<T>(
@@ -359,6 +415,24 @@ function normalizeTable(table: TableMetadata): TableMetadata {
     description: table.description ?? "",
     fields: table.fields ?? {},
     relations: table.relations ?? {}
+  };
+}
+
+function normalizeFrame(frame: FrameMetadata): FrameMetadata {
+  return {
+    ...frame,
+    label: frame.label ?? frame.name,
+    description: frame.description ?? "",
+    fields: frame.fields ?? {},
+    relations: frame.relations ?? {}
+  };
+}
+
+function normalizeView(view: ViewMetadata): ViewMetadata {
+  return {
+    ...view,
+    label: view.label ?? view.name,
+    description: view.description ?? ""
   };
 }
 

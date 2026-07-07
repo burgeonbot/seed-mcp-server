@@ -49,6 +49,42 @@ export class SeedClient {
         await this.updateTable(updatedTable);
         return updatedTable;
     }
+    async listFrames(pageNumber = 0, pageSize = 100, filters) {
+        return this.post("/api/rel_data/frames", {
+            paginationContext: { pageNumber, pageSize },
+            filters
+        });
+    }
+    async getFrame(frameName) {
+        return this.post("/api/rel_data/frame", { frameName });
+    }
+    async createFrame(frame) {
+        return this.postText("/api/rel_data/frame/add", normalizeFrame(frame));
+    }
+    async updateFrame(frame) {
+        return this.postText("/api/rel_data/frame/update", normalizeFrame(frame));
+    }
+    async deleteFrames(framesIds) {
+        return this.postText("/api/rel_data/frames/delete", { framesIds });
+    }
+    async listViews(pageNumber = 0, pageSize = 100, filters) {
+        return this.post("/api/rel_data/views", {
+            paginationContext: { pageNumber, pageSize },
+            filters
+        });
+    }
+    async getView(viewName) {
+        return this.post("/api/rel_data/view", { viewName });
+    }
+    async createView(view) {
+        return this.postText("/api/rel_data/view/add", normalizeView(view));
+    }
+    async updateView(view) {
+        return this.postText("/api/rel_data/view/update", normalizeView(view));
+    }
+    async deleteViews(viewsIds) {
+        return this.postText("/api/rel_data/views/delete", { viewsIds });
+    }
     async listDocuments(table, pageNumber = 0, pageSize = 100, filters, order = []) {
         return this.post("/api/rel_data/documents", {
             paginationContext: { pageNumber, pageSize },
@@ -268,6 +304,22 @@ function normalizeTable(table) {
         description: table.description ?? "",
         fields: table.fields ?? {},
         relations: table.relations ?? {}
+    };
+}
+function normalizeFrame(frame) {
+    return {
+        ...frame,
+        label: frame.label ?? frame.name,
+        description: frame.description ?? "",
+        fields: frame.fields ?? {},
+        relations: frame.relations ?? {}
+    };
+}
+function normalizeView(view) {
+    return {
+        ...view,
+        label: view.label ?? view.name,
+        description: view.description ?? ""
     };
 }
 function normalizeOrganization(organization) {
