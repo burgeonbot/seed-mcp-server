@@ -79,6 +79,8 @@ const client = new SeedClient({
     email: process.env.SEED_EMAIL,
     password: process.env.SEED_PASSWORD
 });
+const currentUserAgentsFrameName = "CurrentUserAgentsFrame";
+const currentUserAgentRunsFrameName = "CurrentUserAgentRunsFrame";
 const server = new McpServer({
     name: "seed-mcp-server",
     version: "0.1.0"
@@ -88,6 +90,124 @@ server.tool("seed_get_access_token", "Get a Seed API access token by prompting f
 }, async ({ type }) => {
     const accessToken = type === "maint" ? await getPromptedMaintToken() : await getPromptedUserToken();
     return toToolResult({ type, accessToken });
+});
+server.tool("trading_bot_login", "Authenticate to Trading Bot with the existing backend login flow. Prompts for organization, email, and password; stores the token only in this MCP server process memory.", {}, async () => {
+    const credentials = await getPromptedUserCredentials("Enter Trading Bot credentials for this MCP session.");
+    const accessToken = await client.getAccessToken(credentials);
+    client.setAccessToken(accessToken);
+    return toToolResult({
+        authenticated: true,
+        orgName: credentials.orgName,
+        email: credentials.email,
+        apiBase: process.env.SEED_API_BASE ?? "http://localhost:3007",
+        tokenStored: "memory-only"
+    });
+});
+server.tool("trading_bot_list_agents", "List Trading Bot agents visible to the logged-in user. Use this to find an agent id before inspecting logs or code.", {
+    pageNumber: z.number().int().min(0).optional().default(0),
+    pageSize: z.number().int().min(1).max(100).optional().default(50),
+    filtersJson: z.string().optional().describe("Optional JSON filters for the agents table."),
+    orderJson: z.string().optional().describe("Optional JSON order array for the agents table.")
+}, async ({ pageNumber, pageSize, filtersJson, orderJson }) => {
+    const filters = parseOptionalJson(filtersJson, "filtersJson");
+    const order = parseOptionalArray(orderJson, "orderJson");
+    const page = await client.listFrameDocuments(currentUserAgentsFrameName, pageNumber, pageSize, filters, order);
+    return toToolResult({
+        paginationContext: page.paginationContext,
+        agents: page.data.map(summarizeAgent)
+    });
+});
+server.tool("trading_bot_get_agent", "Get one Trading Bot agent visible to the logged-in user. By default code is omitted; set includeCode when code review is needed.", {
+    agentId: z.string().min(1),
+    includeCode: z.boolean().optional().default(false)
+}, async ({ agentId, includeCode }) => {
+    const agent = await getVisibleAgent(agentId);
+    return toToolResult(includeCode ? agent : summarizeAgent(agent));
+});
+server.tool("trading_bot_get_agent_code", "Get the currently saved JavaScript code for one Trading Bot agent visible to the logged-in user.", {
+    agentId: z.string().min(1)
+}, async ({ agentId }) => {
+    const agent = await getVisibleAgent(agentId);
+    return toToolResult({
+        agent: summarizeAgent(agent),
+        code: typeof agent.code === "string" ? agent.code : ""
+    });
+});
+server.tool("trading_bot_get_latest_run", "Get the current/latest run document for one Trading Bot agent visible to the logged-in user.", {
+    agentId: z.string().min(1)
+}, async ({ agentId }) => {
+    const agent = await getVisibleAgent(agentId);
+    const runId = getLatestRunId(agent);
+    if (!runId) {
+        return toToolResult({ agent: summarizeAgent(agent), run: null, message: "Agent does not have a current/latest run id." });
+    }
+    const run = await getVisibleRun(runId);
+    return toToolResult({ agent: summarizeAgent(agent), run: summarizeRun(run) });
+});
+server.tool("trading_bot_get_run_logs", "Get logs for a Trading Bot run visible to the logged-in user. Use tailLines/maxChars to keep analysis scalable.", {
+    runId: z.string().min(1),
+    tailLines: z.number().int().min(1).max(5000).optional().default(500),
+    maxChars: z.number().int().min(1000).max(500000).optional().default(120000)
+}, async ({ runId, tailLines, maxChars }) => {
+    await getVisibleRun(runId);
+    const response = await client.getAgentRunLogs(runId);
+    const logText = typeof response.logs === "string" ? response.logs : "";
+    const lines = logText.split(/\r?\n/);
+    const tail = lines.slice(Math.max(0, lines.length - tailLines)).join("\n");
+    const text = trimTextTail(tail, maxChars);
+    return toToolResult({
+        runId: response.runId,
+        totalLogLines: lines.length,
+        returnedLogLines: Math.min(lines.length, tailLines),
+        truncatedToMaxChars: text.truncated,
+        logsText: text.value
+    });
+});
+server.tool("trading_bot_get_agent_latest_logs", "Get the current/latest run logs for a Trading Bot agent visible to the logged-in user.", {
+    agentId: z.string().min(1),
+    tailLines: z.number().int().min(1).max(5000).optional().default(500),
+    maxChars: z.number().int().min(1000).max(500000).optional().default(120000)
+}, async ({ agentId, tailLines, maxChars }) => {
+    const agent = await getVisibleAgent(agentId);
+    const runId = getLatestRunId(agent);
+    if (!runId) {
+        return toToolResult({ agent: summarizeAgent(agent), logs: [], message: "Agent does not have a current/latest run id." });
+    }
+    const response = await client.getAgentRunLogs(runId);
+    const logText = typeof response.logs === "string" ? response.logs : "";
+    const lines = logText.split(/\r?\n/);
+    const tail = lines.slice(Math.max(0, lines.length - tailLines)).join("\n");
+    const text = trimTextTail(tail, maxChars);
+    return toToolResult({
+        agent: summarizeAgent(agent),
+        runId: response.runId,
+        totalLogLines: lines.length,
+        returnedLogLines: Math.min(lines.length, tailLines),
+        truncatedToMaxChars: text.truncated,
+        logsText: text.value
+    });
+});
+server.tool("trading_bot_update_agent_code", "Update a Trading Bot agent's saved code. Only call this after the user explicitly confirms the exact target agent and code change.", {
+    agentId: z.string().min(1),
+    code: z.string().min(1)
+}, async ({ agentId, code }) => {
+    await getVisibleAgent(agentId);
+    const message = await client.updateAgentCode(agentId, code);
+    return toToolResult({ agentId, message });
+});
+server.tool("trading_bot_start_agent", "Start or deploy a Trading Bot agent. Only call this after the user explicitly confirms the target agent and mode.", {
+    agentId: z.string().min(1),
+    mode: z.enum(["run", "deploy"]).optional().default("run")
+}, async ({ agentId, mode }) => {
+    await getVisibleAgent(agentId);
+    const run = await client.startAgent(agentId, mode);
+    return toToolResult({ agentId, mode, runId: run.runId });
+});
+server.tool("trading_bot_stop_run", "Stop a running Trading Bot run. Only call this after the user explicitly confirms the run id.", {
+    runId: z.string().min(1)
+}, async ({ runId }) => {
+    const run = await client.stopAgentRun(runId);
+    return toToolResult({ runId: run.runId });
 });
 server.tool("seed_list_orgs", "List registered Seed organizations. Requires SEED_MAINT_ACCESS_TOKEN or SEED_MAINT_PASSWORD.", {
     pageNumber: z.number().int().min(0).optional().default(0),
@@ -359,29 +479,90 @@ function parseJsonObject(value, fieldName) {
     }
     return parsed;
 }
-async function getPromptedUserToken() {
+function summarizeAgent(agent) {
+    return {
+        id: valueAsString(agent.id),
+        name: agent.name,
+        status: agent.status,
+        runtime: agent.runtime,
+        language: agent.language,
+        currentRunId: valueAsString(agent.currentRunId),
+        latestRunId: valueAsString(agent.latestRunId),
+        lastRunId: valueAsString(agent.lastRunId),
+        hasCode: typeof agent.code === "string" && agent.code.length > 0
+    };
+}
+function summarizeRun(run) {
+    return {
+        id: valueAsString(run.id),
+        agentId: valueAsString(run.agentId),
+        status: run.status,
+        mode: run.mode,
+        startedAt: run.startedAt,
+        stoppedAt: run.stoppedAt,
+        completedAt: run.completedAt
+    };
+}
+async function getVisibleAgent(agentId) {
+    const page = await client.listFrameDocuments(currentUserAgentsFrameName, 0, 1, { id: agentId });
+    const agent = page.data[0];
+    if (!agent) {
+        throw new SeedApiError(`Agent ${agentId} is not visible to the logged-in user.`);
+    }
+    return agent;
+}
+async function getVisibleRun(runId) {
+    const page = await client.listFrameDocuments(currentUserAgentRunsFrameName, 0, 1, { id: runId });
+    const run = page.data[0];
+    if (!run) {
+        throw new SeedApiError(`Run ${runId} is not visible to the logged-in user.`);
+    }
+    return run;
+}
+function getLatestRunId(agent) {
+    return valueAsString(agent.currentRunId ?? agent.latestRunId ?? agent.lastRunId);
+}
+function valueAsString(value) {
+    if (typeof value === "string" && value.length > 0) {
+        return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+    }
+    return undefined;
+}
+function trimTextTail(value, maxChars) {
+    if (value.length <= maxChars) {
+        return { value, truncated: false };
+    }
+    return {
+        value: value.slice(value.length - maxChars),
+        truncated: true
+    };
+}
+async function getPromptedUserCredentials(message) {
     const result = await server.server.elicitInput({
         mode: "form",
-        message: "Enter Seed user credentials to request an access token.",
+        message,
         requestedSchema: {
             type: "object",
             properties: {
                 orgName: {
                     type: "string",
                     title: "Organization",
-                    description: "Seed organization name.",
+                    description: "Trading Bot organization name.",
                     minLength: 1
                 },
                 email: {
                     type: "string",
                     title: "Email",
-                    description: "Seed user email.",
+                    description: "Trading Bot user email.",
                     format: "email"
                 },
                 password: {
                     type: "string",
                     title: "Password",
-                    description: "Seed user password.",
+                    description: "Trading Bot user password.",
                     minLength: 1
                 }
             },
@@ -389,12 +570,16 @@ async function getPromptedUserToken() {
         }
     });
     if (result.action !== "accept" || !result.content) {
-        throw new SeedApiError("Seed access token request cancelled.");
+        throw new SeedApiError("Trading Bot login cancelled.");
     }
-    const orgName = getPromptString(result.content, "orgName");
-    const email = getPromptString(result.content, "email");
-    const password = getPromptString(result.content, "password");
-    return client.getAccessToken({ orgName, email, password });
+    return {
+        orgName: getPromptString(result.content, "orgName"),
+        email: getPromptString(result.content, "email"),
+        password: getPromptString(result.content, "password")
+    };
+}
+async function getPromptedUserToken() {
+    return client.getAccessToken(await getPromptedUserCredentials("Enter Seed user credentials to request an access token."));
 }
 async function getPromptedMaintToken() {
     const result = await server.server.elicitInput({

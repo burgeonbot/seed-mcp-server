@@ -150,6 +150,35 @@ export class SeedClient {
     });
   }
 
+  async listFrameDocuments<T>(
+    frame: string,
+    pageNumber = 0,
+    pageSize = 100,
+    filters?: unknown,
+    order: unknown[] = []
+  ): Promise<Page<T>> {
+    return this.post<Page<T>>("/api/rel_data/documents", {
+      paginationContext: { pageNumber, pageSize },
+      frame,
+      filters,
+      order
+    });
+  }
+
+  async getDocument<T>(
+    table: string,
+    documentId: string,
+    excludeFields: string[] = [],
+    excludeRelations: string[] = []
+  ): Promise<T> {
+    return this.post<T>("/api/rel_data/document", {
+      table,
+      documentId,
+      excludeFields,
+      excludeRelations
+    });
+  }
+
   async addDocuments(table: string, documents: Document[]): Promise<string | string[]> {
     return this.post<string | string[]>("/api/rel_data/documents/add", {
       table,
@@ -169,6 +198,28 @@ export class SeedClient {
       table,
       documentIds
     });
+  }
+
+  async getAgentRunLogs(runId: string): Promise<{ runId: string; logs: string }> {
+    return this.get<{ runId: string; logs: string }>(`/api/rel_data/agent/run/${encodeURIComponent(runId)}/log`);
+  }
+
+  async startAgent(agentId: string, mode: "run" | "deploy" = "run"): Promise<{ runId: string }> {
+    return this.post<{ runId: string }>("/api/rel_data/agent/run", { agentId, mode });
+  }
+
+  async stopAgentRun(runId: string): Promise<{ runId: string }> {
+    return this.post<{ runId: string }>("/api/rel_data/agent/stop", { runId });
+  }
+
+  async updateAgentCode(agentId: string, code: string): Promise<string> {
+    return this.updateDocuments("agents", [
+      {
+        id: agentId,
+        fields: { code },
+        relations: {}
+      }
+    ]);
   }
 
   async grantPermission(resourceId: string, access = fullAccess, roleName = "admin", name?: string): Promise<{
@@ -323,6 +374,10 @@ export class SeedClient {
     return response.accessToken;
   }
 
+  setAccessToken(accessToken: string): void {
+    this.accessToken = accessToken;
+  }
+
   async getMaintAccessToken(password = this.options.maintPassword): Promise<string> {
     if (this.maintAccessToken && password === this.options.maintPassword) {
       return this.maintAccessToken;
@@ -379,6 +434,16 @@ export class SeedClient {
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
+      }
+    });
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    const token = await this.ensureToken();
+    return this.request<T>(path, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`
       }
     });
   }
