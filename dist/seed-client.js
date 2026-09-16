@@ -93,22 +93,6 @@ export class SeedClient {
             order
         });
     }
-    async listFrameDocuments(frame, pageNumber = 0, pageSize = 100, filters, order = []) {
-        return this.post("/api/rel_data/documents", {
-            paginationContext: { pageNumber, pageSize },
-            frame,
-            filters,
-            order
-        });
-    }
-    async getDocument(table, documentId, excludeFields = [], excludeRelations = []) {
-        return this.post("/api/rel_data/document", {
-            table,
-            documentId,
-            excludeFields,
-            excludeRelations
-        });
-    }
     async addDocuments(table, documents) {
         return this.post("/api/rel_data/documents/add", {
             table,
@@ -126,24 +110,6 @@ export class SeedClient {
             table,
             documentIds
         });
-    }
-    async getAgentRunLogs(runId) {
-        return this.get(`/api/rel_data/agent/run/${encodeURIComponent(runId)}/log`);
-    }
-    async startAgent(agentId, mode = "run") {
-        return this.post("/api/rel_data/agent/run", { agentId, mode });
-    }
-    async stopAgentRun(runId) {
-        return this.post("/api/rel_data/agent/stop", { runId });
-    }
-    async updateAgentCode(agentId, code) {
-        return this.updateDocuments("agents", [
-            {
-                id: agentId,
-                fields: { code },
-                relations: {}
-            }
-        ]);
     }
     async grantPermission(resourceId, access = fullAccess, roleName = "admin", name) {
         const role = await this.findRoleByName(roleName);
@@ -265,9 +231,6 @@ export class SeedClient {
         }
         return response.accessToken;
     }
-    setAccessToken(accessToken) {
-        this.accessToken = accessToken;
-    }
     async getMaintAccessToken(password = this.options.maintPassword) {
         if (this.maintAccessToken && password === this.options.maintPassword) {
             return this.maintAccessToken;
@@ -313,15 +276,6 @@ export class SeedClient {
             headers: {
                 "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
-            }
-        });
-    }
-    async get(path) {
-        const token = await this.ensureToken();
-        return this.request(path, {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${token}`
             }
         });
     }

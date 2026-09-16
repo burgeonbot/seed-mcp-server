@@ -43,16 +43,6 @@ npm start
 
 ## Tools
 
-- `trading_bot_login`
-- `trading_bot_list_agents`
-- `trading_bot_get_agent`
-- `trading_bot_get_agent_code`
-- `trading_bot_get_latest_run`
-- `trading_bot_get_run_logs`
-- `trading_bot_get_agent_latest_logs`
-- `trading_bot_update_agent_code`
-- `trading_bot_start_agent`
-- `trading_bot_stop_run`
 - `seed_get_access_token`
 - `seed_list_orgs`
 - `seed_register_org`
@@ -78,48 +68,6 @@ npm start
 - `seed_add_mock_data`
 - `seed_delete_documents`
 - `seed_grant_permission`
-
-## Local Trading Bot Debugging
-
-Build the MCP server:
-
-```bash
-cd /Users/damiaferrer/Documents/burgeonbot/seed-mcp-server
-npm run build
-```
-
-Make sure the backend is running locally. The MCP defaults to:
-
-```bash
-SEED_API_BASE=http://localhost:3007
-```
-
-Register it with Codex:
-
-```bash
-codex mcp add trading-bot -- node /Users/damiaferrer/Documents/burgeonbot/seed-mcp-server/dist/index.js
-```
-
-After restarting Codex, ask it to use the Trading Bot MCP. First call `trading_bot_login`; it will prompt
-for organization, email, and password, then keep the access token in memory for that MCP process.
-
-Useful prompts:
-
-```text
-Use the Trading Bot MCP, login, then list my agents.
-```
-
-```text
-Use the Trading Bot MCP and analyze agent 10's latest logs and current code. Suggest changes, but do not apply them without confirmation.
-```
-
-Mutating tools are available for confirmed changes only:
-
-- `trading_bot_update_agent_code`
-- `trading_bot_start_agent`
-- `trading_bot_stop_run`
-
-Those tools use the existing backend permissions for the logged-in user.
 
 ### `seed_get_access_token`
 

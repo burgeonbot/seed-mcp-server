@@ -100,25 +100,3 @@ export interface Page<T> {
   };
   data: T[];
 }
-
-export interface TradingBotAgent {
-  id?: string | number;
-  name?: string;
-  code?: string;
-  status?: string;
-  currentRunId?: string | number;
-  latestRunId?: string | number;
-  lastRunId?: string | number;
-  [key: string]: unknown;
-}
-
-export interface TradingBotRun {
-  id?: string | number;
-  agentId?: string | number;
-  status?: string;
-  mode?: string;
-  startedAt?: string;
-  stoppedAt?: string;
-  completedAt?: string;
-  [key: string]: unknown;
-}
