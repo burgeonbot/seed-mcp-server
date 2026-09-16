@@ -338,16 +338,6 @@ export class SeedClient {
   }
 
   async getAccessToken(credentials: UserCredentials = {}): Promise<string> {
-    const orgName = credentials.orgName ?? this.options.orgName;
-    const email = credentials.email ?? this.options.email;
-    const password = credentials.password ?? this.options.password;
-
-    if (!orgName || !email || !password) {
-      throw new SeedApiError(
-        "Seed credentials missing. Provide orgName, email, and password, or set SEED_ORG, SEED_EMAIL, and SEED_PASSWORD."
-      );
-    }
-
     if (
       this.accessToken &&
       !credentials.orgName &&
@@ -355,6 +345,16 @@ export class SeedClient {
       !credentials.password
     ) {
       return this.accessToken;
+    }
+
+    const orgName = credentials.orgName ?? this.options.orgName ?? "ALGOTRADING";
+    const email = credentials.email ?? this.options.email;
+    const password = credentials.password ?? this.options.password;
+
+    if (!orgName || !email || !password) {
+      throw new SeedApiError(
+        "Seed credentials missing. Provide orgName, email, and password, or set SEED_ORG, SEED_EMAIL, and SEED_PASSWORD."
+      );
     }
 
     const response = await this.request<{ accessToken?: string }>("/api/rel_data/signin", {

@@ -240,17 +240,17 @@ export class SeedClient {
         };
     }
     async getAccessToken(credentials = {}) {
-        const orgName = credentials.orgName ?? this.options.orgName;
-        const email = credentials.email ?? this.options.email;
-        const password = credentials.password ?? this.options.password;
-        if (!orgName || !email || !password) {
-            throw new SeedApiError("Seed credentials missing. Provide orgName, email, and password, or set SEED_ORG, SEED_EMAIL, and SEED_PASSWORD.");
-        }
         if (this.accessToken &&
             !credentials.orgName &&
             !credentials.email &&
             !credentials.password) {
             return this.accessToken;
+        }
+        const orgName = credentials.orgName ?? this.options.orgName ?? "ALGOTRADING";
+        const email = credentials.email ?? this.options.email;
+        const password = credentials.password ?? this.options.password;
+        if (!orgName || !email || !password) {
+            throw new SeedApiError("Seed credentials missing. Provide orgName, email, and password, or set SEED_ORG, SEED_EMAIL, and SEED_PASSWORD.");
         }
         const response = await this.request("/api/rel_data/signin", {
             method: "POST",
